@@ -1,11 +1,20 @@
 use bevy::prelude::*;
 
-/// Placeholder for services/state (file IO, project model, commands, etc.)
+mod events;
+mod project;
+mod loader;
+mod systems;
+
+pub use events::OpenFolder;
+pub use project::{EditorLayout, Node, NodeKind, ProjectState};
+
 pub struct BackendPlugin;
 
 impl Plugin for BackendPlugin {
-    fn build(&self, _app: &mut App) {
-        // Add resources, events, and systems for data/model here later.
-        // e.g., ProjectState, Command bus, FileSystemService, etc.
+    fn build(&self, app: &mut App) {
+        app.init_resource::<project::ProjectState>()
+            .init_resource::<project::EditorLayout>()
+            .add_event::<events::OpenFolder>()
+            .add_systems(Update, systems::handle_open_folder);
     }
 }

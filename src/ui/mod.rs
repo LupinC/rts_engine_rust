@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
 mod menubar;
-mod statusbar;
 mod workspace;
+mod statusbar;
+mod explorer;
 
-/// Bundles all UI pieces into a single plugin for convenience
 pub struct EditorUiPlugin;
 
 impl Plugin for EditorUiPlugin {
@@ -13,6 +13,7 @@ impl Plugin for EditorUiPlugin {
             Update,
             (
                 menubar::ui_menubar,
+                explorer::ui_explorer,
                 workspace::ui_workspace,
                 statusbar::ui_statusbar,
             ),
