@@ -1,11 +1,13 @@
 use bevy_egui::{egui, EguiContexts};
-use crate::backend::{MapPreview, MapView, WorkspaceSettings, theater_color};
+use crate::backend::{MapPreview, MapView, WorkspaceSettings, ToolState, EditorObjects, Tool, theater_color};
 
 pub fn ui_workspace(
     mut ctx: EguiContexts,
     preview: bevy::prelude::Res<MapPreview>,
     mut view: bevy::prelude::ResMut<MapView>,
     mut settings: bevy::prelude::ResMut<WorkspaceSettings>,
+    tool: bevy::prelude::ResMut<ToolState>,
+    mut objs: bevy::prelude::ResMut<EditorObjects>,
 ) {
     let ctx = ctx.ctx_mut();
 
@@ -13,7 +15,7 @@ pub fn ui_workspace(
         .frame(egui::Frame::default().fill(egui::Color32::BLACK))
         .show(ctx, |ui| {
             let rect = ui.max_rect();
-            let painter = ui.painter().clone(); // avoid borrowing ui
+            let painter = ui.painter().clone();
 
             // Interaction
             let id = ui.make_persistent_id("workspace_canvas");
@@ -38,7 +40,6 @@ pub fn ui_workspace(
                 let zoom_step = 1.0 + (-scroll_y * 0.0015);
                 view.zoom = (view.zoom * zoom_step).clamp(0.2, 5.0);
 
-                // keep cursor anchored while zooming
                 if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
                     let center = rect.center();
                     let from_center_old = pos - center - view.offset;
@@ -47,7 +48,7 @@ pub fn ui_workspace(
                 }
             }
 
-            // Left click selects tile (if any)
+            // Left click interaction (place or select)
             let left_clicked = ui.input(|i| i.pointer.any_released())
                 && ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary))
                 && response.hovered();
@@ -61,16 +62,13 @@ pub fn ui_workspace(
                 let tile_w = base_tile_w * view.zoom;
                 let tile_h = tile_w * 0.5;
 
-                // Center the map by placing the tile-space midpoint (w/2, h/2)
-                // exactly at the panel center, then apply panning offset.
+                // True centering on tile-space midpoint + pan
                 let cx = w_tiles * 0.5;
                 let cy = h_tiles * 0.5;
                 let center_offset = egui::vec2(
                     (cx - cy) * (tile_w * 0.5),
                     (cx + cy) * (tile_h * 0.5),
                 );
-                // If origin were (0,0), the midpoint would be at `center_offset`.
-                // To put the midpoint at `rect.center()`, move origin by -center_offset.
                 let origin = egui::pos2(
                     rect.center().x - center_offset.x + view.offset.x,
                     rect.center().y - center_offset.y + view.offset.y,
@@ -93,33 +91,35 @@ pub fn ui_workspace(
                     draw_iso_grid(&painter, origin, h.width, h.height, tile_w, tile_h);
                 }
 
-                // Selection
+                // Click behavior
                 if left_clicked {
                     if let Some(cursor) = ui.input(|i| i.pointer.hover_pos()) {
                         if let Some((cx, cy)) = pick_cell(cursor, origin, tile_w, tile_h, h.width, h.height) {
-                            settings.selected = Some((cx, cy));
-                        } else {
-                            settings.selected = None;
+                            match tool.current {
+                                Tool::Select => settings.selected = Some((cx, cy)),
+                                Tool::Spawn | Tool::Resource | Tool::Unit => {
+                                    objs.items.push(crate::backend::Placement { kind: tool.current, x: cx, y: cy });
+                                    settings.selected = Some((cx, cy));
+                                }
+                            }
                         }
                     }
                 }
 
-                // Draw selection highlight (center at i+0.5, j+0.5)
+                // Draw placed markers
+                for p in &objs.items {
+                    draw_marker(&painter, p.kind, p.x as f32 + 0.5, p.y as f32 + 0.5, tile_w, tile_h, origin);
+                }
+
+                // Draw selection highlight
                 if let Some((sx, sy)) = settings.selected {
-                    let diamond = diamond_points(
-                        sx as f32 + 0.5,
-                        sy as f32 + 0.5,
-                        tile_w,
-                        tile_h,
-                        origin,
-                    );
+                    let diamond = diamond_points(sx as f32 + 0.5, sy as f32 + 0.5, tile_w, tile_h, origin);
                     painter.add(egui::Shape::closed_line(
                         diamond.to_vec(),
                         egui::Stroke::new(2.0, egui::Color32::from_rgb(250, 230, 80)),
                     ));
                 }
 
-                // Overlay mini UI (top-right)
                 // Overlay mini UI (top-right)
                 egui::Area::new("workspace_overlay".into())
                     .movable(false)
@@ -130,23 +130,14 @@ pub fn ui_workspace(
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
                                     if ui.button("Fit").clicked() {
-                                        // Map extents at zoom = 1.0
-                                        let map_w_1: f32 = rect.width();
+                                        // Fit: width always fits at zoom=1.0. Height limit:
                                         let map_h_1: f32 = rect.width() * 0.5;
-
-                                        // Compute the zoom that fits both dimensions
-                                        let s_w: f32 = (rect.width() / map_w_1).min(1.0);      // always 1.0
-                                        let s_h: f32 = (rect.height() / map_h_1).min(1.0);     // <= 1.0 if height is limiting
-                                        let s: f32 = s_w.min(s_h);                             // final fit zoom
-
-                                        // Apply and center
+                                        let s_h: f32 = (rect.height() / map_h_1).min(1.0);
+                                        let s: f32 = s_h.min(1.0);
                                         view.zoom = s.clamp(0.2, 5.0);
                                         view.offset = egui::Vec2::ZERO;
-
-                                        // Make the change visible immediately
                                         ui.ctx().request_repaint();
                                     }
-
                                     if ui.button("Reset").clicked() {
                                         view.zoom = 1.0;
                                         view.offset = egui::Vec2::ZERO;
@@ -162,7 +153,6 @@ pub fn ui_workspace(
                                 ui.label(format!("Zoom: {:.2}x", view.zoom));
                             });
                     });
-
             } else {
                 // No map loaded yet
                 painter.rect_filled(rect, 0.0, egui::Color32::BLACK);
@@ -185,6 +175,7 @@ pub fn ui_workspace(
         });
 }
 
+// ---------- drawing helpers ----------
 fn draw_iso_grid(
     painter: &egui::Painter,
     origin: egui::Pos2,
@@ -207,16 +198,48 @@ fn draw_iso_grid(
     }
 }
 
+fn draw_marker(
+    painter: &egui::Painter,
+    kind: Tool,
+    cx_center: f32,
+    cy_center: f32,
+    tile_w: f32,
+    tile_h: f32,
+    origin: egui::Pos2,
+) {
+    use egui::{Color32, Stroke};
+
+    let c = cell_to_screen(cx_center, cy_center, tile_w, tile_h, origin);
+    match kind {
+        Tool::Spawn => {
+            // filled circle
+            painter.circle_filled(c, (tile_h * 0.4) as f32, Color32::from_rgb(60, 220, 120));
+            painter.circle_stroke(c, (tile_h * 0.4) as f32, Stroke::new(2.0, Color32::BLACK));
+        }
+        Tool::Resource => {
+            // filled diamond
+            let d = diamond_points(cx_center, cy_center, tile_w, tile_h, origin);
+            painter.add(egui::Shape::convex_polygon(d.to_vec(), Color32::from_rgb(245, 210, 60), Stroke::new(1.5, Color32::BLACK)));
+        }
+        Tool::Unit => {
+            // triangle
+            let size = tile_h * 0.55;
+            let p1 = egui::pos2(c.x, c.y - size * 0.8);
+            let p2 = egui::pos2(c.x - size * 0.7, c.y + size * 0.5);
+            let p3 = egui::pos2(c.x + size * 0.7, c.y + size * 0.5);
+            painter.add(egui::Shape::convex_polygon(vec![p1, p2, p3], Color32::from_rgb(60, 200, 245), Stroke::new(1.5, Color32::BLACK)));
+        }
+        Tool::Select => {}
+    }
+}
+
 fn cell_to_screen(cx: f32, cy: f32, tile_w: f32, tile_h: f32, origin: egui::Pos2) -> egui::Pos2 {
-    // x' = (x - y) * w/2
-    // y' = (x + y) * h/2
     let x = (cx - cy) * (tile_w * 0.5);
     let y = (cx + cy) * (tile_h * 0.5);
     egui::pos2(origin.x + x, origin.y + y)
 }
 
 fn screen_to_cell(px: f32, py: f32, tile_w: f32, tile_h: f32, origin: egui::Pos2) -> (f32, f32) {
-    // Inverse mapping
     let dx = px - origin.x;
     let dy = py - origin.y;
     let a = dx / (tile_w * 0.5);
@@ -235,7 +258,6 @@ fn pick_cell(
     h_tiles: i32,
 ) -> Option<(i32, i32)> {
     let (cx, cy) = screen_to_cell(mouse.x, mouse.y, tile_w, tile_h, origin);
-    // Use floor to map continuous coords to the tile index
     let sx = cx.floor() as i32;
     let sy = cy.floor() as i32;
     if sx >= 0 && sy >= 0 && sx < w_tiles && sy < h_tiles {
@@ -246,12 +268,11 @@ fn pick_cell(
 }
 
 fn diamond_points(cx_center: f32, cy_center: f32, tile_w: f32, tile_h: f32, origin: egui::Pos2) -> [egui::Pos2; 4] {
-    // (cx_center, cy_center) are tile-center coords (i + 0.5, j + 0.5)
     let c = cell_to_screen(cx_center, cy_center, tile_w, tile_h, origin);
     [
-        egui::pos2(c.x - tile_w * 0.5, c.y),              // left
-        egui::pos2(c.x,                 c.y - tile_h*0.5),// top
-        egui::pos2(c.x + tile_w * 0.5, c.y),              // right
-        egui::pos2(c.x,                 c.y + tile_h*0.5),// bottom
+        egui::pos2(c.x - tile_w * 0.5, c.y),
+        egui::pos2(c.x,                 c.y - tile_h * 0.5),
+        egui::pos2(c.x + tile_w * 0.5, c.y),
+        egui::pos2(c.x,                 c.y + tile_h * 0.5),
     ]
 }

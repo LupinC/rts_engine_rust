@@ -4,6 +4,7 @@ mod menubar;
 mod workspace;
 mod statusbar;
 mod explorer;
+mod interact;
 
 pub struct EditorUiPlugin;
 
@@ -12,11 +13,13 @@ impl Plugin for EditorUiPlugin {
         app.add_systems(
             Update,
             (
-                menubar::ui_menubar,
-                explorer::ui_explorer,
-                workspace::ui_workspace,
-                statusbar::ui_statusbar,
-            ).chain(),
+                menubar::ui_menubar,     // top
+                explorer::ui_explorer,   // left
+                interact::ui_interact,   // bottom (your red area)
+                statusbar::ui_statusbar, // bottom status line
+                workspace::ui_workspace, // central (must be last)
+            )
+            .chain(),
         );
     }
 }
