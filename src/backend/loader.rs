@@ -1,101 +1,63 @@
 use anyhow::Result;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::{fs, path::{Path, PathBuf}};
 
 use super::project::{Node, NodeKind};
 
-/// Build a tree from disk with sane limits.
-/// - `max_depth`: stop recursing after this depth
-/// - `max_entries`: global cap on visited entries
-pub fn load_tree_from(root: &Path, max_depth: usize, max_entries: usize) -> Result<Node> {
-    let mut counter = 0usize;
-    walk(root, 0, max_depth, &mut counter, max_entries)
+/// Build a shallow(ish) tree from `root`, with depth & node limits so we don't choke on giant folders.
+pub fn load_tree_from(root: &Path, max_depth: usize, max_nodes: usize) -> Result<Node> {
+    let root = root.canonicalize()?;
+    let mut count = 0;
+    let node = load_dir(&root, 0, max_depth, max_nodes, &mut count)?;
+    Ok(node)
 }
 
-fn walk(
-    path: &Path,
+fn load_dir(
+    dir: &Path,
     depth: usize,
     max_depth: usize,
-    counter: &mut usize,
-    max_entries: usize,
+    max_nodes: usize,
+    count: &mut usize,
 ) -> Result<Node> {
-    if *counter >= max_entries {
-        return Ok(Node {
-            id: norm(path),
-            name: format!("{} (truncated)", last_name(path)),
-            kind: NodeKind::Folder,
-            children: vec![],
-        });
-    }
+    *count += 1;
+    if *count > max_nodes { return Ok(make_leaf(dir)); }
 
-    let meta = fs::symlink_metadata(path)?;
-    let name = last_name(path);
-    if meta.is_dir() {
-        let mut children = Vec::new();
-        if depth < max_depth {
-            let entries = match fs::read_dir(path) {
-                Ok(rd) => rd,
-                Err(_) => {
-                    return Ok(Node {
-                        id: norm(path),
-                        name,
-                        kind: NodeKind::Folder,
-                        children,
-                    });
-                }
-            };
-            for entry in entries {
-                if *counter >= max_entries {
-                    break;
-                }
-                if let Ok(entry) = entry {
-                    let p: PathBuf = entry.path();
-                    if let Some(fname) = p.file_name().and_then(|s| s.to_str()) {
-                        if fname.starts_with('.') {
-                            continue; // skip hidden
-                        }
-                    }
-                    *counter += 1;
-                    if let Ok(node) = walk(&p, depth + 1, max_depth, counter, max_entries) {
-                        children.push(node);
-                    }
-                }
+    let mut children: Vec<Node> = Vec::new();
+    if depth < max_depth {
+        let mut entries: Vec<PathBuf> = fs::read_dir(dir)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .collect();
+        entries.sort();
+
+        for p in entries {
+            if p.is_dir() {
+                children.push(load_dir(&p, depth + 1, max_depth, max_nodes, count)?);
+            } else {
+                let ext = p.extension()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+                let id = p.canonicalize().unwrap_or(p.clone()).to_string_lossy().to_string();
+                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                children.push(Node {
+                    id,
+                    name,
+                    kind: NodeKind::File { path: p.to_string_lossy().to_string(), ext },
+                });
             }
-            // Sort: folders first, then files; then case-insensitive name
-            children.sort_by(|a, b| {
-                use std::cmp::Ordering::*;
-                match (&a.kind, &b.kind) {
-                    (NodeKind::Folder, NodeKind::File) => Less,
-                    (NodeKind::File, NodeKind::Folder) => Greater,
-                    _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-                }
-            });
         }
-        Ok(Node {
-            id: norm(path),
-            name,
-            kind: NodeKind::Folder,
-            children,
-        })
-    } else {
-        Ok(Node {
-            id: norm(path),
-            name,
-            kind: NodeKind::File,
-            children: vec![],
-        })
     }
+
+    Ok(Node {
+        id: dir.to_string_lossy().to_string(),
+        name: dir.file_name().and_then(|s| s.to_str()).unwrap_or(dir.to_string_lossy().as_ref()).to_string(),
+        kind: NodeKind::Folder { children },
+    })
 }
 
-fn last_name(path: &Path) -> String {
-    // Return an owned String (no borrowing of a temporary)
-    match path.file_name() {
-        Some(os) => os.to_string_lossy().to_string(),
-        None => path.display().to_string(),
+fn make_leaf(path: &Path) -> Node {
+    Node {
+        id: path.to_string_lossy().to_string(),
+        name: path.file_name().and_then(|s| s.to_str()).unwrap_or("").to_string(),
+        kind: NodeKind::Folder { children: vec![] },
     }
-}
-
-fn norm(path: &Path) -> String {
-    // Path as forward-slash string (nicer in UI)
-    path.to_string_lossy().replace('\\', "/")
 }

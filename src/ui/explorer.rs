@@ -1,96 +1,168 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
-use crate::backend::{EditorLayout, Node, NodeKind, ProjectState};
+use crate::backend::{
+    EditorLayout, Node, NodeKind, OpenMap, ProjectState,
+};
+
+const INDENT_PER_LEVEL: f32 = 14.0;
+const ROW_HEIGHT: f32 = 22.0;
+const ICON_SPACE: f32 = 18.0;
 
 pub fn ui_explorer(
     mut ctx: EguiContexts,
-    mut layout: ResMut<EditorLayout>,
     project: Res<ProjectState>,
+    mut layout: ResMut<EditorLayout>,
+    mut ev_open_map: EventWriter<OpenMap>,
 ) {
-    if !layout.show_explorer { return; }
-
     let ctx = ctx.ctx_mut();
-    egui::SidePanel::left("explorer")
-        .resizable(true)
-        .default_width(260.0)
-        .min_width(180.0)
-        .show(ctx, |ui| {
-            ui.vertical(|ui| {
-                ui.label(
-                    egui::RichText::new("EXPLORER")
-                        .color(egui::Color32::from_gray(180))
-                        .size(11.0)
-                );
-                ui.add_space(6.0);
 
-                if let Some(root) = &project.root {
-                    // Ensure root is shown open if not explicitly set yet
-                    if !layout.open_folders.contains(&root.id) {
-                        // (Optional) leave as-is; systems.rs already opens root on load.
-                    }
-                    draw_node(ui, root, 0, &mut layout.open_folders);
-                } else {
-                    ui.label(egui::RichText::new("No folder open").italics());
-                    ui.small("Use Folder → Open Folder…");
-                }
+    egui::SidePanel::left("left/explorer")
+        .default_width(240.0)
+        .min_width(200.0)
+        .resizable(true)
+        .show(ctx, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.heading("EXPLORER");
             });
+            ui.add_space(6.0);
+
+            if let Some(root) = &project.root {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        draw_node(
+                            ui,
+                            root,
+                            0,
+                            &mut layout,
+                            &mut ev_open_map,
+                        );
+                    });
+            } else {
+                ui.label(egui::RichText::new("Open a folder to view files").italics());
+            }
         });
 }
 
-/// Draw a single node with indentation and VS Code–like folder toggling.
-/// - Folders: click to expand/collapse.
-/// - Files: click does nothing.
 fn draw_node(
     ui: &mut egui::Ui,
     node: &Node,
     depth: usize,
-    open_set: &mut std::collections::HashSet<String>,
+    layout: &mut EditorLayout,
+    ev_open_map: &mut EventWriter<OpenMap>,
 ) {
-    let indent_px = 12.0 * depth as f32;
+    match &node.kind {
+        NodeKind::Folder { children } => {
+            let opened = layout.open_folders.contains(&node.id);
 
-    match node.kind {
-        NodeKind::Folder => {
-            let is_open = open_set.contains(&node.id);
+            // Row
+            let (rect, _resp) = ui.allocate_exact_size(
+                egui::vec2(ui.available_width(), ROW_HEIGHT),
+                egui::Sense::click(),
+            );
 
-            // Row: [icon] [name]
-            let row = ui.horizontal(|ui| {
-                ui.add_space(indent_px);
+            // Draw background hover (manual so we keep layout stable)
+            if ui.rect_contains_pointer(rect) {
+                ui.painter()
+                    .rect_filled(rect, 2.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 10));
+            }
 
-                // Triangle icon like VS Code: ▶ (closed) / ▼ (open)
-                let icon = if is_open { "▼" } else { "▶" };
-                let icon_resp = ui.add(egui::Label::new(icon).selectable(false));
+            // Triangle + Folder icon + name
+            let indent = INDENT_PER_LEVEL * depth as f32;
+            let mut cursor = rect.left_top() + egui::vec2(indent, 0.0);
+            let triangle = if opened { "▼" } else { "▶" };
+            let folder_icon = "📁";
+            let color = egui::Color32::from_gray(210);
 
-                // Folder name (clickable)
-                let name_resp = ui.selectable_label(false, &node.name);
+            // Triangle
+            ui.painter().text(
+                cursor + egui::vec2(2.0, 3.0),
+                egui::Align2::LEFT_TOP,
+                triangle,
+                egui::FontId::monospace(14.0),
+                color,
+            );
+            cursor.x += ICON_SPACE;
 
-                // Clicking either the icon or the name toggles open
-                if icon_resp.clicked() || name_resp.clicked() {
-                    if is_open {
-                        open_set.remove(&node.id);
-                    } else {
-                        open_set.insert(node.id.clone());
-                    }
+            // Icon
+            ui.painter().text(
+                cursor + egui::vec2(0.0, 3.0),
+                egui::Align2::LEFT_TOP,
+                folder_icon,
+                egui::FontId::monospace(14.0),
+                color,
+            );
+            cursor.x += ICON_SPACE;
+
+            // Name
+            ui.painter().text(
+                cursor + egui::vec2(0.0, 3.0),
+                egui::Align2::LEFT_TOP,
+                &node.name,
+                egui::FontId::proportional(14.0),
+                egui::Color32::from_gray(230),
+            );
+
+            // Toggle expand on click anywhere on the row
+            if ui.interact(rect, ui.make_persistent_id(&node.id), egui::Sense::click()).clicked() {
+                if opened {
+                    layout.open_folders.remove(&node.id);
+                } else {
+                    layout.open_folders.insert(node.id.clone());
                 }
-            });
-            row.response.on_hover_text(node.id.clone());
+            }
 
             // Children
-            if is_open {
-                for child in &node.children {
-                    draw_node(ui, child, depth + 1, open_set);
+            if opened {
+                for child in children {
+                    draw_node(ui, child, depth + 1, layout, ev_open_map);
                 }
             }
         }
-        NodeKind::File => {
-            // File row: do nothing on click by design
-            ui.horizontal(|ui| {
-                ui.add_space(indent_px + 12.0); // align with folder text (icon width)
-                let resp = ui.selectable_label(false, &node.name);
-                if resp.clicked() {
-                    // NO-OP (intentionally do nothing)
+        NodeKind::File { path, ext } => {
+            // One row; clicking .map emits OpenMap; otherwise no-op
+            let (rect, resp) = ui.allocate_exact_size(
+                egui::vec2(ui.available_width(), ROW_HEIGHT),
+                egui::Sense::click(),
+            );
+
+            if ui.rect_contains_pointer(rect) {
+                ui.painter()
+                    .rect_filled(rect, 2.0, egui::Color32::from_rgba_unmultiplied(255, 255, 255, 8));
+            }
+
+            let indent = INDENT_PER_LEVEL * depth as f32 + ICON_SPACE; // files align under folder text
+            let mut cursor = rect.left_top() + egui::vec2(indent, 0.0);
+
+            let file_icon = "📄";
+            let color = egui::Color32::from_gray(200);
+
+            // Icon
+            ui.painter().text(
+                cursor + egui::vec2(0.0, 3.0),
+                egui::Align2::LEFT_TOP,
+                file_icon,
+                egui::FontId::monospace(14.0),
+                color,
+            );
+            cursor.x += ICON_SPACE;
+
+            // Name
+            ui.painter().text(
+                cursor + egui::vec2(0.0, 3.0),
+                egui::Align2::LEFT_TOP,
+                &node.name,
+                egui::FontId::proportional(14.0),
+                egui::Color32::from_gray(230),
+            );
+
+            if resp.clicked() {
+                if ext.to_ascii_lowercase() == "map" {
+                    ev_open_map.send(OpenMap { path: path.clone() });
                 }
-            });
+                // else: do nothing (as requested)
+            }
         }
     }
 }
