@@ -16,7 +16,7 @@ impl Plugin for EditorUiPlugin {
                 explorer::ui_explorer,
                 workspace::ui_workspace,
                 statusbar::ui_statusbar,
-            ),
+            ).chain(),
         );
     }
 }
