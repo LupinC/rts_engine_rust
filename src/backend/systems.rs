@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_egui::egui; // <-- bring in egui for Color32
+use bevy_egui::egui;
 
 use super::events::{OpenFolder, OpenMap};
 use super::loader::load_tree_from;
@@ -54,15 +54,25 @@ pub struct MapPreview {
     pub header: Option<MapHeader>,
 }
 
+/// Pan/zoom state for the workspace map view.
+#[derive(Resource, Debug, Clone)]
+pub struct MapView {
+    pub offset: egui::Vec2, // pixels
+    pub zoom: f32,          // 1.0 = default
+}
+impl Default for MapView {
+    fn default() -> Self {
+        Self { offset: egui::vec2(0.0, 0.0), zoom: 1.0 }
+    }
+}
+
 pub fn handle_open_map(
     mut evr: EventReader<OpenMap>,
     mut preview: ResMut<MapPreview>,
 ) {
     for ev in evr.read() {
-        // Only accept .map (case-insensitive)
         let is_map = ev.path.to_ascii_lowercase().ends_with(".map");
         if !is_map {
-            // Spec says: non-.map does nothing.
             continue;
         }
         match parse_map_header(&ev.path) {
@@ -78,16 +88,16 @@ pub fn handle_open_map(
     }
 }
 
-/// Helper used by the workspace to pick a color per theater (no textures yet).
+/// Theater → base color for preview fill.
 pub fn theater_color(theater: Theater) -> egui::Color32 {
     use egui::Color32;
     match theater {
-        Theater::Temperate => Color32::from_rgb(70, 104, 68),   // greenish
-        Theater::Snow      => Color32::from_rgb(220, 232, 240), // icy white
-        Theater::Urban     => Color32::from_rgb(95, 95, 102),   // gray
-        Theater::NewUrban  => Color32::from_rgb(72, 78, 86),    // darker gray
-        Theater::Desert    => Color32::from_rgb(204, 170, 102), // sand
-        Theater::Lunar     => Color32::from_rgb(180, 180, 190), // pale
-        Theater::Unknown   => Color32::from_rgb(120, 120, 130), // neutral
+        Theater::Temperate => Color32::from_rgb(70, 104, 68),
+        Theater::Snow      => Color32::from_rgb(220, 232, 240),
+        Theater::Urban     => Color32::from_rgb(95, 95, 102),
+        Theater::NewUrban  => Color32::from_rgb(72, 78, 86),
+        Theater::Desert    => Color32::from_rgb(204, 170, 102),
+        Theater::Lunar     => Color32::from_rgb(180, 180, 190),
+        Theater::Unknown   => Color32::from_rgb(120, 120, 130),
     }
 }
