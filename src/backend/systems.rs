@@ -3,13 +3,13 @@ use bevy_egui::egui;
 
 use super::events::{OpenFolder, OpenMap};
 use super::loader::load_tree_from;
-use super::map_parser::{parse_map_header, MapHeader, Theater};
+use super::map_parser::{parse_map, MapData, Theater};
 use super::project::{EditorLayout, ProjectState};
 
-/// Holds the currently previewed map (if any) for the workspace to render.
+/// Holds the currently loaded map with all pins we render.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct MapPreview {
-    pub header: Option<MapHeader>,
+    pub map: Option<MapData>,
 }
 
 /// Pan/zoom state for the workspace map view.
@@ -40,7 +40,7 @@ pub fn handle_open_folder(
     mut evr: EventReader<OpenFolder>,
     mut project: ResMut<ProjectState>,
     mut layout: ResMut<EditorLayout>,
-    // ▼ Added: reset workspace when closing (or opening a new) folder
+    // ▼ Reset workspace when switching/closing folder
     mut preview: ResMut<MapPreview>,
     mut view: ResMut<MapView>,
     mut ws: ResMut<WorkspaceSettings>,
@@ -58,8 +58,8 @@ pub fn handle_open_folder(
                             layout.open_folders.clear();
                             layout.open_folders.insert(root_id);
 
-                            // Reset workspace view & selection when switching folders
-                            preview.header = None;
+                            // Reset workspace view & selection
+                            preview.map = None;
                             *view = MapView::default();
                             ws.selected = None;
 
@@ -71,8 +71,7 @@ pub fn handle_open_folder(
                             layout.show_explorer = false;
                             layout.open_folders.clear();
 
-                            // Also reset workspace to blank
-                            preview.header = None;
+                            preview.map = None;
                             *view = MapView::default();
                             ws.selected = None;
 
@@ -89,8 +88,7 @@ pub fn handle_open_folder(
                 layout.show_explorer = false;
                 layout.open_folders.clear();
 
-                // ▼ Ensure the workspace returns to its original blank view
-                preview.header = None;
+                preview.map = None;
                 *view = MapView::default();
                 ws.selected = None;
 
@@ -107,20 +105,19 @@ pub fn handle_open_map(
     mut ws: ResMut<WorkspaceSettings>,
 ) {
     for ev in evr.read() {
-        let is_map = ev.path.to_ascii_lowercase().ends_with(".map");
-        if !is_map {
+        if !ev.path.to_ascii_lowercase().ends_with(".map") {
             continue;
         }
-        match parse_map_header(&ev.path) {
-            Ok(h) => {
-                preview.header = Some(h);
+        match parse_map(&ev.path) {
+            Ok(m) => {
+                preview.map = Some(m);
                 // Reset camera & selection so the new map appears centered.
                 *view = MapView::default();
                 ws.selected = None;
-                println!("[backend] Loaded map header from {}", ev.path);
+                println!("[backend] Loaded map {}", ev.path);
             }
             Err(e) => {
-                preview.header = None;
+                preview.map = None;
                 eprintln!("[backend] Failed to parse map {}: {e}", ev.path);
             }
         }

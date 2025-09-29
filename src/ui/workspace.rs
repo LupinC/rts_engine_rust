@@ -1,5 +1,8 @@
 use bevy_egui::{egui, EguiContexts};
-use crate::backend::{MapPreview, MapView, WorkspaceSettings, ToolState, EditorObjects, Tool, theater_color};
+use crate::backend::{
+    MapPreview, MapView, WorkspaceSettings,
+    ToolState, EditorObjects, Tool, theater_color
+};
 
 pub fn ui_workspace(
     mut ctx: EguiContexts,
@@ -17,7 +20,7 @@ pub fn ui_workspace(
             let rect = ui.max_rect();
             let painter = ui.painter().clone();
 
-            // Interaction
+            // Interaction scaffold
             let id = ui.make_persistent_id("workspace_canvas");
             let response = ui.interact(rect, id, egui::Sense::click_and_drag());
 
@@ -39,7 +42,6 @@ pub fn ui_workspace(
                 let old_zoom = view.zoom;
                 let zoom_step = 1.0 + (-scroll_y * 0.0015);
                 view.zoom = (view.zoom * zoom_step).clamp(0.2, 5.0);
-
                 if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
                     let center = rect.center();
                     let from_center_old = pos - center - view.offset;
@@ -48,16 +50,16 @@ pub fn ui_workspace(
                 }
             }
 
-            // Left click interaction (place or select)
+            // Left click behavior (kept for future interactions)
             let left_clicked = ui.input(|i| i.pointer.any_released())
                 && ui.input(|i| i.pointer.button_released(egui::PointerButton::Primary))
                 && response.hovered();
 
-            if let Some(h) = &preview.header {
+            if let Some(m) = &preview.map {
                 // Geometry
                 let panel_w = rect.width();
-                let w_tiles = h.width.max(1) as f32;
-                let h_tiles = h.height.max(1) as f32;
+                let w_tiles = m.width.max(1) as f32;
+                let h_tiles = m.height.max(1) as f32;
                 let base_tile_w = (panel_w / (w_tiles + h_tiles)) * 2.0;
                 let tile_w = base_tile_w * view.zoom;
                 let tile_h = tile_w * 0.5;
@@ -74,31 +76,94 @@ pub fn ui_workspace(
                     rect.center().y - center_offset.y + view.offset.y,
                 );
 
-                // Fill diamond
-                let bg = theater_color(h.theater);
-                let left   = cell_to_screen(0.0, 0.0,          tile_w, tile_h, origin);
-                let top    = cell_to_screen(w_tiles, 0.0,      tile_w, tile_h, origin);
-                let right  = cell_to_screen(w_tiles, h_tiles,  tile_w, tile_h, origin);
-                let bottom = cell_to_screen(0.0,     h_tiles,  tile_w, tile_h, origin);
+                // Fill diamond with theater color
+                let bg = theater_color(m.theater);
+                let left  = cell_to_screen(0.0,      0.0,       tile_w, tile_h, origin);
+                let top   = cell_to_screen(w_tiles,  0.0,       tile_w, tile_h, origin);
+                let right = cell_to_screen(w_tiles,  h_tiles,   tile_w, tile_h, origin);
+                let bottom= cell_to_screen(0.0,      h_tiles,   tile_w, tile_h, origin);
                 painter.add(egui::Shape::convex_polygon(
-                    vec![left, top, right, bottom],
-                    bg,
-                    egui::Stroke::NONE,
+                    vec![left, top, right, bottom], bg, egui::Stroke::NONE,
                 ));
 
-                // Optional grid
+                // Grid
                 if settings.show_grid {
-                    draw_iso_grid(&painter, origin, h.width, h.height, tile_w, tile_h);
+                    draw_iso_grid(&painter, origin, m.width, m.height, tile_w, tile_h);
                 }
 
-                // Click behavior
+                // --- Display parsed items ---
+
+                // Waypoints (W1..)
+                for (i, (wx, wy)) in m.waypoints.iter().enumerate() {
+                    // Convert global coords to local (subtract local origin, if any)
+                    let lx = *wx - m.local_origin_x;
+                    let ly = *wy - m.local_origin_y;
+                    if lx < 0 || ly < 0 || lx >= m.width || ly >= m.height {
+                        continue; // out of local bounds; skip
+                    }
+
+                    let color = if i < m.num_starting_points { egui::Color32::from_rgb(60,220,120) }
+                                else { egui::Color32::from_rgb(245,210,60) };
+
+                    draw_marker_circle(
+                        &painter,
+                        lx as f32 + 0.5,
+                        ly as f32 + 0.5,
+                        tile_w, tile_h, origin,
+                        color,
+                    );
+
+                    let pos = cell_to_screen(lx as f32 + 0.5, ly as f32 + 0.2, tile_w, tile_h, origin);
+                    painter.text(
+                        pos,
+                        egui::Align2::CENTER_TOP,
+                        format!("W{}", i + 1),
+                        egui::FontId::proportional(12.0),
+                        egui::Color32::WHITE,
+                    );
+                }
+
+                // Units (blue triangles)
+                for u in &m.units {
+                    let lx = u.x - m.local_origin_x;
+                    let ly = u.y - m.local_origin_y;
+                    if lx < 0 || ly < 0 || lx >= m.width || ly >= m.height {
+                        continue;
+                    }
+                    draw_marker_triangle(
+                        &painter,
+                        lx as f32 + 0.5,
+                        ly as f32 + 0.5,
+                        tile_w, tile_h, origin,
+                        egui::Color32::from_rgb(60,200,245),
+                    );
+                }
+
+                // Structures (red squares/diamonds)
+                for s in &m.structures {
+                    let lx = s.x - m.local_origin_x;
+                    let ly = s.y - m.local_origin_y;
+                    if lx < 0 || ly < 0 || lx >= m.width || ly >= m.height {
+                        continue;
+                    }
+                    draw_marker_diamond(
+                        &painter,
+                        lx as f32 + 0.5,
+                        ly as f32 + 0.5,
+                        tile_w, tile_h, origin,
+                        egui::Color32::from_rgb(220,80,80),
+                    );
+                }
+
+                // Click → selection (kept; no placing in this version)
                 if left_clicked {
                     if let Some(cursor) = ui.input(|i| i.pointer.hover_pos()) {
-                        if let Some((cx, cy)) = pick_cell(cursor, origin, tile_w, tile_h, h.width, h.height) {
+                        if let Some((cx, cy)) = pick_cell(cursor, origin, tile_w, tile_h, m.width, m.height) {
+                            // With tools still present in state, retain select behavior only.
                             match tool.current {
                                 Tool::Select => settings.selected = Some((cx, cy)),
-                                Tool::Spawn | Tool::Resource | Tool::Unit => {
-                                    objs.items.push(crate::backend::Placement { kind: tool.current, x: cx, y: cy });
+                                _ => {
+                                    // No placement in this version (just display).
                                     settings.selected = Some((cx, cy));
                                 }
                             }
@@ -106,16 +171,16 @@ pub fn ui_workspace(
                     }
                 }
 
-                // Draw placed markers
+                // Draw user-placed markers from previous sessions (optional)
                 for p in &objs.items {
-                    draw_marker(&painter, p.kind, p.x as f32 + 0.5, p.y as f32 + 0.5, tile_w, tile_h, origin);
+                    draw_marker_kind(&painter, p.kind, p.x as f32 + 0.5, p.y as f32 + 0.5, tile_w, tile_h, origin);
                 }
 
-                // Draw selection highlight
+                // Selection ring
                 if let Some((sx, sy)) = settings.selected {
-                    let diamond = diamond_points(sx as f32 + 0.5, sy as f32 + 0.5, tile_w, tile_h, origin);
+                    let d = diamond_points(sx as f32 + 0.5, sy as f32 + 0.5, tile_w, tile_h, origin);
                     painter.add(egui::Shape::closed_line(
-                        diamond.to_vec(),
+                        d.to_vec(),
                         egui::Stroke::new(2.0, egui::Color32::from_rgb(250, 230, 80)),
                     ));
                 }
@@ -130,7 +195,7 @@ pub fn ui_workspace(
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
                                     if ui.button("Fit").clicked() {
-                                        // Fit: width always fits at zoom=1.0. Height limit:
+                                        // Fit height at zoom <= 1
                                         let map_h_1: f32 = rect.width() * 0.5;
                                         let s_h: f32 = (rect.height() / map_h_1).min(1.0);
                                         let s: f32 = s_h.min(1.0);
@@ -145,6 +210,7 @@ pub fn ui_workspace(
                                     ui.separator();
                                     ui.toggle_value(&mut settings.show_grid, "Grid");
                                 });
+
                                 if let Some((sx, sy)) = settings.selected {
                                     ui.label(format!("Tile: {}, {}", sx, sy));
                                 } else {
@@ -153,6 +219,7 @@ pub fn ui_workspace(
                                 ui.label(format!("Zoom: {:.2}x", view.zoom));
                             });
                     });
+
             } else {
                 // No map loaded yet
                 painter.rect_filled(rect, 0.0, egui::Color32::BLACK);
@@ -165,7 +232,7 @@ pub fn ui_workspace(
                                 .color(egui::Color32::from_gray(200)),
                         );
                         ui.label(
-                            egui::RichText::new("Open a folder, then click a .map to preview it. Right/Middle drag to pan, scroll to zoom.")
+                            egui::RichText::new("Open a folder, then click a .map to preview it.\nRight/Middle drag to pan, scroll to zoom.")
                                 .size(13.0)
                                 .color(egui::Color32::from_gray(150)),
                         );
@@ -176,6 +243,7 @@ pub fn ui_workspace(
 }
 
 // ---------- drawing helpers ----------
+
 fn draw_iso_grid(
     painter: &egui::Painter,
     origin: egui::Pos2,
@@ -185,7 +253,6 @@ fn draw_iso_grid(
     tile_h: f32,
 ) {
     let grid = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 80);
-
     for y in 0..=h_tiles {
         let a = cell_to_screen(0.0, y as f32, tile_w, tile_h, origin);
         let b = cell_to_screen(w_tiles as f32, y as f32, tile_w, tile_h, origin);
@@ -198,7 +265,59 @@ fn draw_iso_grid(
     }
 }
 
-fn draw_marker(
+fn draw_marker_circle(
+    painter: &egui::Painter,
+    cx_center: f32,
+    cy_center: f32,
+    tile_w: f32,
+    tile_h: f32,
+    origin: egui::Pos2,
+    color: egui::Color32,
+) {
+    let c = cell_to_screen(cx_center, cy_center, tile_w, tile_h, origin);
+    painter.circle_filled(c, (tile_h * 0.4) as f32, color);
+    painter.circle_stroke(c, (tile_h * 0.4) as f32, egui::Stroke::new(1.5, egui::Color32::BLACK));
+}
+
+fn draw_marker_triangle(
+    painter: &egui::Painter,
+    cx_center: f32,
+    cy_center: f32,
+    tile_w: f32,
+    tile_h: f32,
+    origin: egui::Pos2,
+    color: egui::Color32,
+) {
+    let size = tile_h * 0.55;
+    let c = cell_to_screen(cx_center, cy_center, tile_w, tile_h, origin);
+    let p1 = egui::pos2(c.x, c.y - size * 0.8);
+    let p2 = egui::pos2(c.x - size * 0.7, c.y + size * 0.5);
+    let p3 = egui::pos2(c.x + size * 0.7, c.y + size * 0.5);
+    painter.add(egui::Shape::convex_polygon(
+        vec![p1, p2, p3],
+        color,
+        egui::Stroke::new(1.5, egui::Color32::BLACK),
+    ));
+}
+
+fn draw_marker_diamond(
+    painter: &egui::Painter,
+    cx_center: f32,
+    cy_center: f32,
+    tile_w: f32,
+    tile_h: f32,
+    origin: egui::Pos2,
+    color: egui::Color32,
+) {
+    let d = diamond_points(cx_center, cy_center, tile_w, tile_h, origin);
+    painter.add(egui::Shape::convex_polygon(
+        d.to_vec(),
+        color,
+        egui::Stroke::new(1.5, egui::Color32::BLACK),
+    ));
+}
+
+fn draw_marker_kind(
     painter: &egui::Painter,
     kind: Tool,
     cx_center: f32,
@@ -207,29 +326,11 @@ fn draw_marker(
     tile_h: f32,
     origin: egui::Pos2,
 ) {
-    use egui::{Color32, Stroke};
-
-    let c = cell_to_screen(cx_center, cy_center, tile_w, tile_h, origin);
     match kind {
-        Tool::Spawn => {
-            // filled circle
-            painter.circle_filled(c, (tile_h * 0.4) as f32, Color32::from_rgb(60, 220, 120));
-            painter.circle_stroke(c, (tile_h * 0.4) as f32, Stroke::new(2.0, Color32::BLACK));
-        }
-        Tool::Resource => {
-            // filled diamond
-            let d = diamond_points(cx_center, cy_center, tile_w, tile_h, origin);
-            painter.add(egui::Shape::convex_polygon(d.to_vec(), Color32::from_rgb(245, 210, 60), Stroke::new(1.5, Color32::BLACK)));
-        }
-        Tool::Unit => {
-            // triangle
-            let size = tile_h * 0.55;
-            let p1 = egui::pos2(c.x, c.y - size * 0.8);
-            let p2 = egui::pos2(c.x - size * 0.7, c.y + size * 0.5);
-            let p3 = egui::pos2(c.x + size * 0.7, c.y + size * 0.5);
-            painter.add(egui::Shape::convex_polygon(vec![p1, p2, p3], Color32::from_rgb(60, 200, 245), Stroke::new(1.5, Color32::BLACK)));
-        }
-        Tool::Select => {}
+        Tool::Spawn   => draw_marker_circle(painter, cx_center, cy_center, tile_w, tile_h, origin, egui::Color32::from_rgb(60, 220, 120)),
+        Tool::Resource=> draw_marker_diamond(painter, cx_center, cy_center, tile_w, tile_h, origin, egui::Color32::from_rgb(245,210,60)),
+        Tool::Unit    => draw_marker_triangle(painter, cx_center, cy_center, tile_w, tile_h, origin, egui::Color32::from_rgb(60,200,245)),
+        Tool::Select  => {},
     }
 }
 
@@ -267,12 +368,18 @@ fn pick_cell(
     }
 }
 
-fn diamond_points(cx_center: f32, cy_center: f32, tile_w: f32, tile_h: f32, origin: egui::Pos2) -> [egui::Pos2; 4] {
+fn diamond_points(
+    cx_center: f32,
+    cy_center: f32,
+    tile_w: f32,
+    tile_h: f32,
+    origin: egui::Pos2,
+) -> [egui::Pos2; 4] {
     let c = cell_to_screen(cx_center, cy_center, tile_w, tile_h, origin);
     [
         egui::pos2(c.x - tile_w * 0.5, c.y),
-        egui::pos2(c.x,                 c.y - tile_h * 0.5),
+        egui::pos2(c.x, c.y - tile_h * 0.5),
         egui::pos2(c.x + tile_w * 0.5, c.y),
-        egui::pos2(c.x,                 c.y + tile_h * 0.5),
+        egui::pos2(c.x, c.y + tile_h * 0.5),
     ]
 }
