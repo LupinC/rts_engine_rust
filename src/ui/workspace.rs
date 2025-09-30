@@ -232,9 +232,11 @@ pub fn ui_workspace(
                                 .color(egui::Color32::from_gray(200)),
                         );
                         ui.label(
-                            egui::RichText::new("Open a folder, then click a .map to preview it.\nRight/Middle drag to pan, scroll to zoom.")
-                                .size(13.0)
-                                .color(egui::Color32::from_gray(150)),
+                            egui::RichText::new(
+                                "Create or open a project, then pick a .mpr map from the Explorer.\nRight/Middle drag to pan, scroll to zoom.\nRight-click folders to add new maps or subfolders."
+                            )
+                            .size(13.0)
+                            .color(egui::Color32::from_gray(150)),
                         );
                     });
                 });

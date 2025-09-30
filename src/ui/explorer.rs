@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
-use crate::backend::{EditorLayout, Node, NodeKind, OpenMap, ProjectState};
+use crate::backend::{EditorLayout, ExplorerCommand, Node, NodeKind, OpenMap, ProjectState};
 
 const INDENT_PER_LEVEL: f32 = 14.0;
 const ROW_HEIGHT: f32 = 22.0;
@@ -12,6 +12,7 @@ pub fn ui_explorer(
     project: Res<ProjectState>,
     mut layout: ResMut<EditorLayout>,
     mut ev_open_map: EventWriter<OpenMap>,
+    mut ev_command: EventWriter<ExplorerCommand>,
 ) {
     let ctx = ctx.ctx_mut();
 
@@ -29,7 +30,7 @@ pub fn ui_explorer(
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        draw_node(ui, root, 0, &mut layout, &mut ev_open_map);
+                        draw_node(ui, root, 0, &mut layout, &mut ev_open_map, &mut ev_command);
                     });
             } else {
                 ui.label(egui::RichText::new("Open a folder to view files").italics());
@@ -43,6 +44,7 @@ fn draw_node(
     depth: usize,
     layout: &mut EditorLayout,
     ev_open_map: &mut EventWriter<OpenMap>,
+    ev_command: &mut EventWriter<ExplorerCommand>,
 ) {
     match &node.kind {
         NodeKind::Folder { children } => {
@@ -105,10 +107,21 @@ fn draw_node(
                 }
             }
 
+            resp.context_menu(|ui| {
+                if ui.button("New Map").clicked() {
+                    ev_command.send(ExplorerCommand::NewFile { parent: node.id.clone() });
+                    ui.close_menu();
+                }
+                if ui.button("New Folder").clicked() {
+                    ev_command.send(ExplorerCommand::NewFolder { parent: node.id.clone() });
+                    ui.close_menu();
+                }
+            });
+
             // Children
             if opened {
                 for child in children {
-                    draw_node(ui, child, depth + 1, layout, ev_open_map);
+                    draw_node(ui, child, depth + 1, layout, ev_open_map, ev_command);
                 }
             }
         }
@@ -150,7 +163,8 @@ fn draw_node(
             );
 
             if resp.clicked() {
-                if ext.to_ascii_lowercase() == "map" {
+                let ext_lower = ext.to_ascii_lowercase();
+                if ext_lower == "mpr" || ext_lower == "map" {
                     ev_open_map.send(OpenMap { path: path.clone() });
                 }
                 // else: intentionally do nothing

@@ -1,9 +1,13 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
-use crate::backend::OpenFolder; // event
+use crate::backend::{CreateProject, OpenFolder};
 
-pub fn ui_menubar(mut ctx: EguiContexts, mut open_ev: EventWriter<OpenFolder>) {
+pub fn ui_menubar(
+    mut ctx: EguiContexts,
+    mut open_ev: EventWriter<OpenFolder>,
+    mut create_ev: EventWriter<CreateProject>,
+) {
     let ctx = ctx.ctx_mut();
 
     egui::TopBottomPanel::top("menubar").exact_height(28.0).show(ctx, |ui| {
@@ -11,8 +15,12 @@ pub fn ui_menubar(mut ctx: EguiContexts, mut open_ev: EventWriter<OpenFolder>) {
             ui.spacing_mut().item_spacing.x = 12.0;
             ui.add_space(4.0);
 
-            // Folder menu
-            ui.menu_button("Folder", |ui| {
+            // File menu (project + folder management)
+            ui.menu_button("File", |ui| {
+                if ui.button("Create Project…").clicked() {
+                    create_ev.send(CreateProject);
+                    ui.close_menu();
+                }
                 if ui.button("Open Folder…").clicked() {
                     open_ev.send(OpenFolder::Pick); // <-- now requests a real OS dialog
                     ui.close_menu();

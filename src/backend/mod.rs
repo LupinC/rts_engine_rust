@@ -7,16 +7,15 @@ mod systems;
 mod map_parser;
 mod editor_objects; // keep as a private module
 
-pub use events::{OpenFolder, OpenMap};
+pub use events::{CreateProject, ExplorerCommand, OpenFolder, OpenMap};
 pub use project::{EditorLayout, Node, NodeKind, ProjectState};
 pub use systems::{MapPreview, MapView, WorkspaceSettings, theater_color};
 
 // Re-export editor objects (including palette API) so ui can `use crate::backend::{...}`
 pub use editor_objects::{
-    Tool, ToolState, EditorObjects, Placement,
-    PaletteTab, PaletteState, palette_entries, // <-- added
+    Tool, ToolState, EditorObjects,
+    PaletteTab, PaletteState, palette_entries,
 };
-
 pub struct BackendPlugin;
 
 impl Plugin for BackendPlugin {
@@ -29,8 +28,18 @@ impl Plugin for BackendPlugin {
             .init_resource::<WorkspaceSettings>()
             .init_resource::<ToolState>()
             .init_resource::<EditorObjects>()
+            .add_event::<events::CreateProject>()
+            .add_event::<events::ExplorerCommand>()
             .add_event::<events::OpenFolder>()
             .add_event::<events::OpenMap>()
-            .add_systems(Update, (systems::handle_open_folder, systems::handle_open_map));
+            .add_systems(
+                Update,
+                (
+                    systems::handle_create_project,
+                    systems::handle_open_folder,
+                    systems::handle_explorer_command,
+                    systems::handle_open_map,
+                ),
+            );
     }
 }

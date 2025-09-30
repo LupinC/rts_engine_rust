@@ -1,0 +1,11 @@
+{
+  "theater": "temperate",
+  "width": 64,
+  "height": 64,
+  "local_origin_x": 0,
+  "local_origin_y": 0,
+  "waypoints": [],
+  "num_starting_points": 0,
+  "units": [],
+  "structures": []
+}

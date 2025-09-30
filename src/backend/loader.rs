@@ -42,6 +42,10 @@ fn load_dir(
                     .map(|s| s.to_string())
                     .unwrap_or_default();
 
+                if ext.eq_ignore_ascii_case("map") {
+                    continue; // legacy format hidden from explorer
+                }
+
                 let id = p
                     .canonicalize()
                     .unwrap_or(p.clone())

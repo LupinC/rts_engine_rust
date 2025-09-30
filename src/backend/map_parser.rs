@@ -1,43 +1,66 @@
 use anyhow::{anyhow, Result};
-use std::fs;
+use serde::{Deserialize, Serialize};
+use std::{fs, path::Path};
 
 /// High-level data we render in the workspace.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapData {
+    #[serde(default = "default_theater")]
     pub theater: Theater,
     pub width: i32,
     pub height: i32,
     /// Origin used to convert absolute (global) object coords -> local workspace.
+    #[serde(default)]
     pub local_origin_x: i32,
+    #[serde(default)]
     pub local_origin_y: i32,
 
     /// Waypoints from [Header].WaypointN = x,y or [Waypoints] (decoded if x,y form).
+    #[serde(default)]
     pub waypoints: Vec<(i32, i32)>,
     /// First `n` waypoints are starting locations.
+    #[serde(default)]
     pub num_starting_points: usize,
 
     /// Units & structures as generic pins (x,y + hints).
+    #[serde(default)]
     pub units: Vec<MapPin>,
+    #[serde(default)]
     pub structures: Vec<MapPin>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapPin {
     pub x: i32,
     pub y: i32,
+    #[serde(default)]
     pub kind: String,
+    #[serde(default)]
     pub owner: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Theater {
     Temperate,
     Snow,
     Urban,
+    #[serde(rename = "newurban")]
     NewUrban,
     Desert,
     Lunar,
+    #[serde(other)]
     Unknown,
+}
+
+impl Default for Theater {
+    fn default() -> Self {
+        Theater::Temperate
+    }
+}
+
+fn default_theater() -> Theater {
+    Theater::Temperate
 }
 
 impl Theater {
@@ -54,6 +77,48 @@ impl Theater {
     }
 }
 
+/// Convenience for initializing a blank editor map.
+pub fn blank_map(width: i32, height: i32) -> MapData {
+    MapData {
+        theater: Theater::Temperate,
+        width: width.max(1),
+        height: height.max(1),
+        local_origin_x: 0,
+        local_origin_y: 0,
+        waypoints: Vec::new(),
+        num_starting_points: 0,
+        units: Vec::new(),
+        structures: Vec::new(),
+    }
+}
+
+/// Persist a map to disk as a pretty-printed `.mpr` JSON document.
+pub fn save_mpr<P: AsRef<Path>>(path: P, map: &MapData) -> Result<()> {
+    let json = serde_json::to_string_pretty(map)?;
+    fs::write(path, json)?;
+    Ok(())
+}
+
+/// Load a map (`.mpr` custom format or legacy `.map`) into a shared representation.
+pub fn parse_map(path: &str) -> Result<MapData> {
+    if path.to_ascii_lowercase().ends_with(".mpr") {
+        parse_mpr(path)
+    } else {
+        parse_ra2_map(path)
+    }
+}
+
+/// Parse the editor's JSON-based `.mpr` format.
+fn parse_mpr(path: &str) -> Result<MapData> {
+    let text = fs::read_to_string(path)?;
+    let map: MapData = serde_json::from_str(&text)
+        .map_err(|e| anyhow!("Invalid .mpr {}: {e}", path))?;
+    if map.width <= 0 || map.height <= 0 {
+        return Err(anyhow!("Invalid map size in {}", path));
+    }
+    Ok(map)
+}
+
 /// Parse a RA2/YR `.map` enough to render the board and show pins.
 ///
 /// Supports:
@@ -61,7 +126,7 @@ impl Theater {
 /// - [Header] StartX/StartY (preferred local origin), NumberStartingPoints, WaypointN=X,Y
 /// - [Waypoints] N=X,Y (uses x,y form if present; numeric cell ids are ignored here)
 /// - [Units]/[Structures] tolerant CSV; last two ints as X,Y
-pub fn parse_map(path: &str) -> Result<MapData> {
+fn parse_ra2_map(path: &str) -> Result<MapData> {
     let text = fs::read_to_string(path)?;
 
     let mut section = String::new();
