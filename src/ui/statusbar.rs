@@ -1,4 +1,4 @@
-use bevy_egui::{egui, EguiContexts};
+use bevy_egui::{EguiContexts, egui};
 
 pub fn ui_statusbar(mut ctx: EguiContexts) {
     let ctx = ctx.ctx_mut();

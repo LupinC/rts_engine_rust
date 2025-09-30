@@ -23,4 +23,14 @@ pub struct OpenMap {
 pub enum ExplorerCommand {
     NewFile { parent: String },
     NewFolder { parent: String },
+    RenameEntry { from: String, new_name: String },
+    DeleteEntry { path: String },
+}
+
+/// Workspace-level commands (tabs, saving, etc.).
+#[derive(Event, Debug, Clone)]
+pub enum WorkspaceCommand {
+    SaveActive,
+    SaveAndClose { path: String },
+    CloseMap { path: String },
 }

@@ -2,9 +2,9 @@ use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 
 mod app;
-mod ui;
-mod frontend;
 mod backend;
+mod frontend;
+mod ui;
 
 /// Public entry point used by `main.rs`
 pub fn run() {
@@ -14,7 +14,7 @@ pub fn run() {
             // Core Bevy plugins & window setup done in `app::setup`
             app::setup::CoreWindowPlugin,
             EguiPlugin,
-            ui::EditorUiPlugin,     // Menubar + workspace + statusbar
+            ui::EditorUiPlugin,       // Menubar + workspace + statusbar
             frontend::FrontendPlugin, // Placeholder for “game view”, panels, etc.
             backend::BackendPlugin,   // Placeholder for data/model services
         ))

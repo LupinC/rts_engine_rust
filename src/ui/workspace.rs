@@ -1,18 +1,151 @@
-use bevy_egui::{egui, EguiContexts};
 use crate::backend::{
-    MapPreview, MapView, WorkspaceSettings,
-    ToolState, EditorObjects, Tool, theater_color
+    EditorLayout, EditorObjects, MapPreview, MapView, OpenMap, ProjectState, Tool, ToolState,
+    WorkspaceCommand, WorkspaceSettings, theater_color,
 };
+use bevy_egui::{EguiContexts, egui};
 
 pub fn ui_workspace(
     mut ctx: EguiContexts,
+    mut layout: bevy::prelude::ResMut<EditorLayout>,
     preview: bevy::prelude::Res<MapPreview>,
     mut view: bevy::prelude::ResMut<MapView>,
     mut settings: bevy::prelude::ResMut<WorkspaceSettings>,
     tool: bevy::prelude::ResMut<ToolState>,
-    mut objs: bevy::prelude::ResMut<EditorObjects>,
+    objs: bevy::prelude::ResMut<EditorObjects>,
+    project: bevy::prelude::Res<ProjectState>,
+    mut open_map_writer: bevy::prelude::EventWriter<OpenMap>,
+    mut workspace_writer: bevy::prelude::EventWriter<WorkspaceCommand>,
 ) {
     let ctx = ctx.ctx_mut();
+
+    if ctx.input(|i| i.key_pressed(egui::Key::S) && i.modifiers.command) {
+        workspace_writer.send(WorkspaceCommand::SaveActive);
+    }
+
+    egui::TopBottomPanel::top("workspace/tabs")
+        .exact_height(24.0)
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if project.open_maps.is_empty() {
+                    ui.label(
+                        egui::RichText::new("No maps open")
+                            .italics()
+                            .color(egui::Color32::from_gray(150)),
+                    );
+                } else {
+                    for entry in &project.open_maps {
+                        let is_active = project.active_map.as_deref() == Some(&entry.path);
+                        let is_dirty = project.is_dirty(&entry.path);
+                        let label = if is_dirty {
+                            format!("{} •", entry.name)
+                        } else {
+                            entry.name.clone()
+                        };
+                        let response = ui.add(egui::SelectableLabel::new(is_active, label));
+
+                        if response.clicked() && !is_active {
+                            open_map_writer.send(OpenMap {
+                                path: entry.path.clone(),
+                            });
+                        }
+
+                        if response.middle_clicked() {
+                            if is_dirty {
+                                layout.request_close(entry.path.clone(), entry.name.clone(), true);
+                            } else {
+                                workspace_writer.send(WorkspaceCommand::CloseMap {
+                                    path: entry.path.clone(),
+                                });
+                            }
+                        }
+
+                        response.context_menu(|ui| {
+                            if ui.button("Close").clicked() {
+                                if project.is_dirty(&entry.path) {
+                                    layout.request_close(
+                                        entry.path.clone(),
+                                        entry.name.clone(),
+                                        true,
+                                    );
+                                } else {
+                                    workspace_writer.send(WorkspaceCommand::CloseMap {
+                                        path: entry.path.clone(),
+                                    });
+                                }
+                                ui.close_menu();
+                            }
+                        });
+                    }
+                }
+            });
+        });
+
+    if let Some(pending) = layout.pending_close.clone() {
+        if !pending.requires_save {
+            workspace_writer.send(WorkspaceCommand::CloseMap {
+                path: pending.path.clone(),
+            });
+            layout.clear_pending_close();
+        } else {
+            enum CloseAction {
+                None,
+                Save,
+                Discard,
+                Cancel,
+            }
+
+            let mut action = CloseAction::None;
+            let mut keep_open = true;
+            egui::Window::new("Unsaved changes")
+                .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+                .collapsible(false)
+                .resizable(false)
+                .open(&mut keep_open)
+                .show(ctx, |ui| {
+                    ui.vertical(|ui| {
+                        ui.label(format!(
+                            "Save changes to \"{}\" before closing?",
+                            pending.name
+                        ));
+                        ui.add_space(8.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("Save").clicked() {
+                                action = CloseAction::Save;
+                            }
+                            if ui.button("Don't Save").clicked() {
+                                action = CloseAction::Discard;
+                            }
+                            if ui.button("Cancel").clicked() {
+                                action = CloseAction::Cancel;
+                            }
+                        });
+                    });
+                });
+
+            if !keep_open {
+                layout.clear_pending_close();
+            } else {
+                match action {
+                    CloseAction::Save => {
+                        workspace_writer.send(WorkspaceCommand::SaveAndClose {
+                            path: pending.path.clone(),
+                        });
+                        layout.clear_pending_close();
+                    }
+                    CloseAction::Discard => {
+                        workspace_writer.send(WorkspaceCommand::CloseMap {
+                            path: pending.path.clone(),
+                        });
+                        layout.clear_pending_close();
+                    }
+                    CloseAction::Cancel => {
+                        layout.clear_pending_close();
+                    }
+                    CloseAction::None => {}
+                }
+            }
+        }
+    }
 
     egui::CentralPanel::default()
         .frame(egui::Frame::default().fill(egui::Color32::BLACK))
@@ -258,12 +391,18 @@ fn draw_iso_grid(
     for y in 0..=h_tiles {
         let a = cell_to_screen(0.0, y as f32, tile_w, tile_h, origin);
         let b = cell_to_screen(w_tiles as f32, y as f32, tile_w, tile_h, origin);
-        painter.add(egui::Shape::line_segment([a, b], egui::Stroke::new(1.0, grid)));
+        painter.add(egui::Shape::line_segment(
+            [a, b],
+            egui::Stroke::new(1.0, grid),
+        ));
     }
     for x in 0..=w_tiles {
         let a = cell_to_screen(x as f32, 0.0, tile_w, tile_h, origin);
         let b = cell_to_screen(x as f32, h_tiles as f32, tile_w, tile_h, origin);
-        painter.add(egui::Shape::line_segment([a, b], egui::Stroke::new(1.0, grid)));
+        painter.add(egui::Shape::line_segment(
+            [a, b],
+            egui::Stroke::new(1.0, grid),
+        ));
     }
 }
 
@@ -278,7 +417,11 @@ fn draw_marker_circle(
 ) {
     let c = cell_to_screen(cx_center, cy_center, tile_w, tile_h, origin);
     painter.circle_filled(c, (tile_h * 0.4) as f32, color);
-    painter.circle_stroke(c, (tile_h * 0.4) as f32, egui::Stroke::new(1.5, egui::Color32::BLACK));
+    painter.circle_stroke(
+        c,
+        (tile_h * 0.4) as f32,
+        egui::Stroke::new(1.5, egui::Color32::BLACK),
+    );
 }
 
 fn draw_marker_triangle(
@@ -329,10 +472,34 @@ fn draw_marker_kind(
     origin: egui::Pos2,
 ) {
     match kind {
-        Tool::Spawn   => draw_marker_circle(painter, cx_center, cy_center, tile_w, tile_h, origin, egui::Color32::from_rgb(60, 220, 120)),
-        Tool::Resource=> draw_marker_diamond(painter, cx_center, cy_center, tile_w, tile_h, origin, egui::Color32::from_rgb(245,210,60)),
-        Tool::Unit    => draw_marker_triangle(painter, cx_center, cy_center, tile_w, tile_h, origin, egui::Color32::from_rgb(60,200,245)),
-        Tool::Select  => {},
+        Tool::Spawn => draw_marker_circle(
+            painter,
+            cx_center,
+            cy_center,
+            tile_w,
+            tile_h,
+            origin,
+            egui::Color32::from_rgb(60, 220, 120),
+        ),
+        Tool::Resource => draw_marker_diamond(
+            painter,
+            cx_center,
+            cy_center,
+            tile_w,
+            tile_h,
+            origin,
+            egui::Color32::from_rgb(245, 210, 60),
+        ),
+        Tool::Unit => draw_marker_triangle(
+            painter,
+            cx_center,
+            cy_center,
+            tile_w,
+            tile_h,
+            origin,
+            egui::Color32::from_rgb(60, 200, 245),
+        ),
+        Tool::Select => {}
     }
 }
 

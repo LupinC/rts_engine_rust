@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
-mod menubar;
-mod workspace;
-mod statusbar;
 mod explorer;
 mod interact;
+mod menubar;
+mod statusbar;
+mod workspace;
 
 pub struct EditorUiPlugin;
 
@@ -19,7 +19,7 @@ impl Plugin for EditorUiPlugin {
                 statusbar::ui_statusbar, // bottom status line
                 workspace::ui_workspace, // central (must be last)
             )
-            .chain(),
+                .chain(),
         );
     }
 }

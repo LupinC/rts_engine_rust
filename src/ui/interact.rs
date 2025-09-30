@@ -1,11 +1,8 @@
+use crate::backend::{PaletteState, PaletteTab, palette_entries};
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContexts};
-use crate::backend::{PaletteTab, PaletteState, palette_entries};
+use bevy_egui::{EguiContexts, egui};
 
-pub fn ui_interact(
-    mut ctx: EguiContexts,
-    mut palette: ResMut<PaletteState>,
-) {
+pub fn ui_interact(mut ctx: EguiContexts, mut palette: ResMut<PaletteState>) {
     let ctx = ctx.ctx_mut();
 
     egui::TopBottomPanel::bottom("bottom/interact")
@@ -16,7 +13,7 @@ pub fn ui_interact(
         .frame(
             egui::Frame::default()
                 .fill(egui::Color32::from_rgb(16, 16, 16))
-                .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+                .inner_margin(egui::Margin::symmetric(10.0, 8.0)),
         )
         .show(ctx, |ui| {
             // --- Tabs row ---
@@ -31,7 +28,7 @@ pub fn ui_interact(
                     if let Some(e) = entries.get(idx) {
                         ui.label(
                             egui::RichText::new(format!("Selected: {}", e.name))
-                                .color(egui::Color32::GRAY)
+                                .color(egui::Color32::GRAY),
                         );
                     }
                 }
@@ -52,14 +49,18 @@ pub fn ui_interact(
                             let (bg, txt, border) = if sel {
                                 (item.color, egui::Color32::BLACK, egui::Color32::WHITE)
                             } else {
-                                (egui::Color32::from_gray(34), egui::Color32::from_gray(230), egui::Color32::from_gray(80))
+                                (
+                                    egui::Color32::from_gray(34),
+                                    egui::Color32::from_gray(230),
+                                    egui::Color32::from_gray(80),
+                                )
                             };
 
                             let button = egui::Button::new(
                                 egui::RichText::new(format!("{}\n{}", item.emoji, item.name))
                                     .size(16.0)
                                     .color(txt)
-                                    .strong()
+                                    .strong(),
                             )
                             .min_size(egui::vec2(80.0, 80.0))
                             .rounding(8.0)
@@ -81,9 +82,17 @@ pub fn ui_interact(
 fn tab_button(ui: &mut egui::Ui, current: &mut PaletteTab, me: PaletteTab, label: &str) {
     let on = *current == me;
     let (bg, fg, border) = if on {
-        (egui::Color32::from_gray(230), egui::Color32::BLACK, egui::Color32::WHITE)
+        (
+            egui::Color32::from_gray(230),
+            egui::Color32::BLACK,
+            egui::Color32::WHITE,
+        )
     } else {
-        (egui::Color32::from_gray(40), egui::Color32::from_gray(220), egui::Color32::from_gray(70))
+        (
+            egui::Color32::from_gray(40),
+            egui::Color32::from_gray(220),
+            egui::Color32::from_gray(70),
+        )
     };
 
     let btn = egui::Button::new(egui::RichText::new(label).strong())
