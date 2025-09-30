@@ -81,7 +81,7 @@ pub fn ui_interact(mut ctx: EguiContexts, mut palette: ResMut<PaletteState>) {
 
 fn tab_button(ui: &mut egui::Ui, current: &mut PaletteTab, me: PaletteTab, label: &str) {
     let on = *current == me;
-    let (bg, fg, border) = if on {
+    let (bg, _fg, border) = if on {
         (
             egui::Color32::from_gray(230),
             egui::Color32::BLACK,
