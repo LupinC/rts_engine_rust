@@ -104,7 +104,7 @@ pub fn parse_map(path: &str) -> Result<MapData> {
     if path.to_ascii_lowercase().ends_with(".mpr") {
         parse_mpr(path)
     } else {
-        parse_ra2_map(path)
+        parse_legacy_ini_map(path)
     }
 }
 
@@ -119,14 +119,14 @@ fn parse_mpr(path: &str) -> Result<MapData> {
     Ok(map)
 }
 
-/// Parse a RA2/YR `.map` enough to render the board and show pins.
+/// Parse a legacy INI-style `.map` enough to render the board and show pins.
 ///
 /// Supports:
 /// - [Map] Theater, Size (W,H)/(X,Y,W,H), LocalSize (X,Y,W,H) -> we use W,H for local rect
 /// - [Header] StartX/StartY (preferred local origin), NumberStartingPoints, WaypointN=X,Y
 /// - [Waypoints] N=X,Y (uses x,y form if present; numeric cell ids are ignored here)
 /// - [Units]/[Structures] tolerant CSV; last two ints as X,Y
-fn parse_ra2_map(path: &str) -> Result<MapData> {
+fn parse_legacy_ini_map(path: &str) -> Result<MapData> {
     let text = fs::read_to_string(path)?;
 
     let mut section = String::new();
@@ -257,7 +257,7 @@ fn parse_ra2_map(path: &str) -> Result<MapData> {
     }
 
     // Choose origin for converting absolute coords -> local:
-    // Prefer [Header].StartX/StartY (correct for RA2/YR absolute waypoints),
+    // Prefer [Header].StartX/StartY (correct for absolute waypoints),
     // else fall back to [Map].LocalSize.X,Y, else 0,0.
     let (origin_x, origin_y) = if let Some((sx, sy)) = start_xy {
         (sx, sy)
@@ -282,7 +282,7 @@ fn parse_ra2_map(path: &str) -> Result<MapData> {
     })
 }
 
-/// Parse a typical RA2/YR CSV object line and return a pin with (x,y).
+/// Parse a typical legacy CSV object line and return a pin with (x,y).
 /// Strategy:
 /// - Split by commas
 /// - Take the **last two parseable integers** as (x,y)
