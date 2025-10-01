@@ -6,7 +6,7 @@ use bevy_egui::egui;
 use super::project::ProjectState;
 use super::resources::{MapPreview, MapView, WorkspaceSettings};
 use crate::backend::events::OpenMap;
-use crate::backend::map_parser::{Theater, parse_map};
+use crate::backend::map::{Theater, parse_map};
 
 pub fn handle_open_map(
     mut evr: EventReader<OpenMap>,

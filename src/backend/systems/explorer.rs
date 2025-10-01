@@ -10,7 +10,7 @@ use super::project::{EditorLayout, ProjectState};
 use super::resources::{MapPreview, MapView, WorkspaceSettings};
 use crate::backend::events::{ExplorerCommand, OpenMap};
 use crate::backend::loader::load_tree_from;
-use crate::backend::map_parser::{blank_map, save_mpr};
+use crate::backend::map::{blank_map, save_mpr};
 
 pub fn handle_explorer_command(
     mut evr: EventReader<ExplorerCommand>,

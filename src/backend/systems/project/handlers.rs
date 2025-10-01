@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::backend::events::{CreateProject, OpenFolder};
 use crate::backend::loader::load_tree_from;
-use crate::backend::map_parser::parse_map;
+use crate::backend::map::parse_map;
 
 use super::super::resources::{MapPreview, MapView, WorkspaceSettings};
 use super::state::{EditorLayout, ProjectState};

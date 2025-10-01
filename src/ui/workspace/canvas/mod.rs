@@ -1,9 +1,9 @@
 use bevy::prelude::Vec2;
 use bevy_egui::egui;
 
-use crate::{
-    backend::{EditorObjects, MapPreview, MapView, Tool, WorkspaceSettings, theater_color},
-    map::coords::{IsoStaggered, IsoTileSize},
+use crate::backend::{
+    map::{IsoStaggered, IsoTileSize},
+    EditorObjects, MapPreview, MapView, Tool, WorkspaceSettings, theater_color,
 };
 
 use self::drawing::{

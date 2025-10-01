@@ -4,7 +4,6 @@ use bevy_egui::EguiPlugin;
 mod app;
 mod backend;
 mod frontend;
-mod map;
 mod ui;
 
 /// Public entry point used by `main.rs`

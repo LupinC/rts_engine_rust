@@ -3,8 +3,8 @@ use bevy::prelude::*;
 mod editor_objects;
 mod events;
 mod loader;
-mod map_parser;
 mod systems; // keep as a private module
+pub mod map;
 
 pub use events::{CreateProject, ExplorerCommand, OpenFolder, OpenMap, WorkspaceCommand};
 pub use systems::project::{EditorLayout, Node, NodeKind, ProjectState};

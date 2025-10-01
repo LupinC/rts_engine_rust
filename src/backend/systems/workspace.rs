@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::project::{EditorLayout, ProjectState};
 use super::resources::{MapPreview, MapView, WorkspaceSettings};
 use crate::backend::events::{OpenMap, WorkspaceCommand};
-use crate::backend::map_parser::save_mpr;
+use crate::backend::map::save_mpr;
 
 pub fn handle_workspace_command(
     mut evr: EventReader<WorkspaceCommand>,

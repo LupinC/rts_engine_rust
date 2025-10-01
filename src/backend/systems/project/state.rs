@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::backend::map_parser::{blank_map, save_mpr};
+use crate::backend::map::{blank_map, save_mpr};
 
 /// UI layout prefs/state
 #[derive(Resource, Default, Debug, Clone)]

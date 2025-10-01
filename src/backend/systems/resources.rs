@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use super::super::map_parser::MapData;
+use crate::backend::map::MapData;
 
 /// Holds the currently loaded map with all pins we render.
 #[derive(Resource, Debug, Clone, Default)]

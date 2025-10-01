@@ -2,8 +2,7 @@ use bevy::prelude::Vec2;
 use bevy_egui::egui;
 
 use crate::{
-    backend::Tool,
-    map::coords::IsoStaggered,
+    backend::{map::IsoStaggered, Tool},
 };
 
 pub(super) fn draw_iso_grid(
