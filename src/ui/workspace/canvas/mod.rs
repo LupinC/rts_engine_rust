@@ -1,10 +1,14 @@
+use bevy::prelude::Vec2;
 use bevy_egui::egui;
 
-use crate::backend::{EditorObjects, MapPreview, MapView, Tool, WorkspaceSettings, theater_color};
+use crate::{
+    backend::{EditorObjects, MapPreview, MapView, Tool, WorkspaceSettings, theater_color},
+    map::coords::{IsoStaggered, IsoTileSize},
+};
 
 use self::drawing::{
-    cell_to_screen, diamond_points, draw_iso_grid, draw_marker_circle, draw_marker_diamond,
-    draw_marker_kind, draw_marker_triangle, pick_cell,
+    draw_iso_grid, draw_marker_circle, draw_marker_diamond, draw_marker_kind,
+    draw_marker_triangle, pick_cell, tile_center, tile_outline_points,
 };
 
 mod drawing;
@@ -31,35 +35,40 @@ pub(super) fn render_canvas(
             let left_clicked = detect_left_click(ui, &response);
 
             if let Some(map) = &preview.map {
-                let panel_w = rect.width();
-                let w_tiles = map.width.max(1) as f32;
-                let h_tiles = map.height.max(1) as f32;
-                let base_tile_w = (panel_w / (w_tiles + h_tiles)) * 2.0;
-                let tile_w = base_tile_w * view.zoom;
+                let panel_w = rect.width().max(1.0);
+                let panel_h = rect.height().max(1.0);
+                let w_tiles = map.width.max(1);
+                let h_tiles = map.height.max(1);
+
+                let width_factor = w_tiles as f32 + if h_tiles > 1 { 0.5 } else { 0.0 };
+                let height_factor = (h_tiles as f32 + 1.0) * 0.5;
+
+                let base_tile_w = (panel_w / width_factor)
+                    .min(panel_h * 2.0 / height_factor)
+                    .max(1.0);
+                let tile_w = (base_tile_w * view.zoom).max(2.0);
                 let tile_h = tile_w * 0.5;
 
-                let cx = w_tiles * 0.5;
-                let cy = h_tiles * 0.5;
-                let center_offset =
-                    egui::vec2((cx - cy) * (tile_w * 0.5), (cx + cy) * (tile_h * 0.5));
+                let mut iso = IsoStaggered {
+                    tile: IsoTileSize::new(tile_w, tile_h),
+                    origin: Vec2::ZERO,
+                };
+                let map_size = iso.map_world_size(w_tiles, h_tiles);
                 let origin = egui::pos2(
-                    rect.center().x - center_offset.x + view.offset.x,
-                    rect.center().y - center_offset.y + view.offset.y,
+                    rect.center().x - map_size.x * 0.5 + view.offset.x,
+                    rect.center().y - map_size.y * 0.5 + view.offset.y,
                 );
+                iso.origin = Vec2::new(origin.x, origin.y);
 
                 let bg = theater_color(map.theater);
-                let left = cell_to_screen(0.0, 0.0, tile_w, tile_h, origin);
-                let top = cell_to_screen(w_tiles, 0.0, tile_w, tile_h, origin);
-                let right = cell_to_screen(w_tiles, h_tiles, tile_w, tile_h, origin);
-                let bottom = cell_to_screen(0.0, h_tiles, tile_w, tile_h, origin);
-                painter.add(egui::Shape::convex_polygon(
-                    vec![left, top, right, bottom],
-                    bg,
-                    egui::Stroke::NONE,
-                ));
+                for y in 0..map.height {
+                    for x in 0..map.width {
+                        drawing::fill_tile(&painter, &iso, x, y, bg);
+                    }
+                }
 
                 if settings.show_grid {
-                    draw_iso_grid(&painter, origin, map.width, map.height, tile_w, tile_h);
+                    draw_iso_grid(&painter, &iso, map.width, map.height);
                 }
 
                 for (i, (wx, wy)) in map.waypoints.iter().enumerate() {
@@ -75,21 +84,13 @@ pub(super) fn render_canvas(
                         egui::Color32::from_rgb(245, 210, 60)
                     };
 
-                    draw_marker_circle(
-                        &painter,
-                        lx as f32 + 0.5,
-                        ly as f32 + 0.5,
-                        tile_w,
-                        tile_h,
-                        origin,
-                        color,
-                    );
+                    draw_marker_circle(&painter, &iso, lx, ly, color);
 
-                    let pos =
-                        cell_to_screen(lx as f32 + 0.5, ly as f32 + 0.2, tile_w, tile_h, origin);
+                    let center = tile_center(&iso, lx, ly);
+                    let label_pos = egui::pos2(center.x, center.y - iso.tile.h * 0.35 - 6.0);
                     painter.text(
-                        pos,
-                        egui::Align2::CENTER_TOP,
+                        label_pos,
+                        egui::Align2::CENTER_BOTTOM,
                         format!("W{}", i + 1),
                         egui::FontId::proportional(12.0),
                         egui::Color32::WHITE,
@@ -104,11 +105,9 @@ pub(super) fn render_canvas(
                     }
                     draw_marker_triangle(
                         &painter,
-                        lx as f32 + 0.5,
-                        ly as f32 + 0.5,
-                        tile_w,
-                        tile_h,
-                        origin,
+                        &iso,
+                        lx,
+                        ly,
                         egui::Color32::from_rgb(60, 200, 245),
                     );
                 }
@@ -121,20 +120,16 @@ pub(super) fn render_canvas(
                     }
                     draw_marker_diamond(
                         &painter,
-                        lx as f32 + 0.5,
-                        ly as f32 + 0.5,
-                        tile_w,
-                        tile_h,
-                        origin,
+                        &iso,
+                        lx,
+                        ly,
                         egui::Color32::from_rgb(220, 80, 80),
                     );
                 }
 
                 if left_clicked {
                     if let Some(cursor) = ui.input(|i| i.pointer.hover_pos()) {
-                        if let Some((cx, cy)) =
-                            pick_cell(cursor, origin, tile_w, tile_h, map.width, map.height)
-                        {
+                        if let Some((cx, cy)) = pick_cell(cursor, &iso, map.width, map.height) {
                             match active_tool {
                                 Tool::Select => settings.selected = Some((cx, cy)),
                                 _ => settings.selected = Some((cx, cy)),
@@ -144,24 +139,17 @@ pub(super) fn render_canvas(
                 }
 
                 for p in &objs.items {
-                    draw_marker_kind(
-                        &painter,
-                        p.kind,
-                        p.x as f32 + 0.5,
-                        p.y as f32 + 0.5,
-                        tile_w,
-                        tile_h,
-                        origin,
-                    );
+                    draw_marker_kind(&painter, p.kind, &iso, p.x, p.y);
                 }
 
                 if let Some((sx, sy)) = settings.selected {
-                    let d =
-                        diamond_points(sx as f32 + 0.5, sy as f32 + 0.5, tile_w, tile_h, origin);
-                    painter.add(egui::Shape::closed_line(
-                        d.to_vec(),
-                        egui::Stroke::new(2.0, egui::Color32::from_rgb(250, 230, 80)),
-                    ));
+                    if sx >= 0 && sy >= 0 && sx < map.width && sy < map.height {
+                        let outline = tile_outline_points(&iso, sx, sy);
+                        painter.add(egui::Shape::closed_line(
+                            outline.to_vec(),
+                            egui::Stroke::new(2.0, egui::Color32::from_rgb(250, 230, 80)),
+                        ));
+                    }
                 }
 
                 egui::Area::new("workspace_overlay".into())

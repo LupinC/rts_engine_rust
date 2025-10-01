@@ -6,6 +6,8 @@ edition = "2024"
 [dependencies]
 bevy = { version = "0.14", features = ["png", "jpeg"] }
 bevy_egui = "0.28"
+bevy_prototype_lyon = "0.13"
+bevy_ecs_tilemap = "0.14"
 rfd = "0.14"
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
