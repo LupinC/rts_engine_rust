@@ -10,7 +10,7 @@ use super::project::{EditorLayout, ProjectState};
 use super::resources::{MapPreview, MapView, WorkspaceSettings};
 use crate::backend::events::{ExplorerCommand, OpenMap};
 use crate::backend::loader::load_tree_from;
-use crate::backend::map::{blank_map, save_mpr};
+use crate::backend::map::{default_map_template, save_mpr};
 
 pub fn handle_explorer_command(
     mut evr: EventReader<ExplorerCommand>,
@@ -45,7 +45,7 @@ pub fn handle_explorer_command(
                 }
 
                 let file_path = unique_map_path(&parent_path);
-                if let Err(e) = save_mpr(&file_path, &blank_map(64, 64)) {
+                if let Err(e) = save_mpr(&file_path, &default_map_template()) {
                     eprintln!(
                         "[backend] Failed to create new map {}: {e}",
                         file_path.display()

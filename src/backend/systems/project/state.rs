@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::backend::map::{blank_map, save_mpr};
+use crate::backend::map::{default_map_template, save_mpr};
 
 /// UI layout prefs/state
 #[derive(Resource, Default, Debug, Clone)]
@@ -304,7 +304,7 @@ pub fn scaffold_project(root: &Path) -> Result<PathBuf> {
 
     let map_path = maps_dir.join("main.mpr");
     if !map_path.exists() {
-        let map = blank_map(64, 64);
+    let map = default_map_template();
         save_mpr(&map_path, &map)
             .with_context(|| format!("Failed to write default map {}", map_path.display()))?;
     }

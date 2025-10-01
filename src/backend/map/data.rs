@@ -89,3 +89,10 @@ pub fn blank_map(width: i32, height: i32) -> MapData {
         structures: Vec::new(),
     }
 }
+
+/// Load the default map template bundled with the editor (samplemap/blank.mpr).
+/// Falls back to a basic 64x64 blank map if the template cannot be parsed.
+pub fn default_map_template() -> MapData {
+    const TEMPLATE_JSON: &str = include_str!("../../samplemap/blank.mpr");
+    serde_json::from_str(TEMPLATE_JSON).unwrap_or_else(|_| blank_map(64, 64))
+}
