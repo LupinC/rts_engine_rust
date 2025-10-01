@@ -20,6 +20,29 @@ pub(super) fn draw_iso_grid(
     }
 }
 
+pub(super) fn draw_border_outline(
+    painter: &egui::Painter,
+    iso: &IsoStaggered,
+    w_tiles: i32,
+    h_tiles: i32,
+    color: egui::Color32,
+    stroke_width: f32,
+) {
+    if w_tiles <= 0 || h_tiles <= 0 {
+        return;
+    }
+
+    let stroke = egui::Stroke::new(stroke_width, color);
+
+    let top_left = tile_outline_points(iso, 0, 0)[0];
+    let top_right = tile_outline_points(iso, w_tiles - 1, 0)[1];
+    let bottom_right = tile_outline_points(iso, w_tiles - 1, h_tiles - 1)[2];
+    let bottom_left = tile_outline_points(iso, 0, h_tiles - 1)[3];
+
+    let rect_points = vec![top_left, top_right, bottom_right, bottom_left];
+    painter.add(egui::Shape::closed_line(rect_points, stroke));
+}
+
 pub(super) fn draw_marker_circle(
     painter: &egui::Painter,
     iso: &IsoStaggered,

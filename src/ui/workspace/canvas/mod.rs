@@ -7,7 +7,7 @@ use crate::backend::{
 };
 
 use self::drawing::{
-    draw_iso_grid, draw_marker_circle, draw_marker_diamond, draw_marker_kind,
+    draw_border_outline, draw_iso_grid, draw_marker_circle, draw_marker_diamond, draw_marker_kind,
     draw_marker_triangle, pick_cell, tile_center, tile_outline_points,
 };
 
@@ -70,6 +70,9 @@ pub(super) fn render_canvas(
                 if settings.show_grid {
                     draw_iso_grid(&painter, &iso, map.width, map.height);
                 }
+
+                let border_color = egui::Color32::from_rgb(220, 40, 40);
+                draw_border_outline(&painter, &iso, map.width, map.height, border_color, 2.0);
 
                 for (i, (wx, wy)) in map.waypoints.iter().enumerate() {
                     let lx = *wx - map.local_origin_x;
