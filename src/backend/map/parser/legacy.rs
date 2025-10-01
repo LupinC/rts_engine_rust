@@ -156,6 +156,7 @@ pub fn parse_legacy_ini_map(path: &str) -> Result<MapData> {
         height,
         local_origin_x: origin_x,
         local_origin_y: origin_y,
+        elevations: vec![0; (width as usize) * (height as usize)],
         waypoints,
         num_starting_points: number_starting_points,
         units,

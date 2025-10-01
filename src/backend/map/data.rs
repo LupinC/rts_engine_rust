@@ -13,6 +13,10 @@ pub struct MapData {
     #[serde(default)]
     pub local_origin_y: i32,
 
+    /// Per-tile elevation (z axis). Stored row-major with length = width * height.
+    #[serde(default)]
+    pub elevations: Vec<i32>,
+
     /// Waypoints from [Header].WaypointN = x,y or [Waypoints] (decoded if x,y form).
     #[serde(default)]
     pub waypoints: Vec<(i32, i32)>,
@@ -77,22 +81,60 @@ impl Theater {
 
 /// Convenience for initializing a blank editor map.
 pub fn blank_map(width: i32, height: i32) -> MapData {
-    MapData {
+    let mut map = MapData {
         theater: Theater::Temperate,
         width: width.max(1),
         height: height.max(1),
         local_origin_x: 0,
         local_origin_y: 0,
+        elevations: Vec::new(),
         waypoints: Vec::new(),
         num_starting_points: 0,
         units: Vec::new(),
         structures: Vec::new(),
-    }
+    };
+    map.ensure_elevations();
+    map
 }
 
 /// Load the default map template bundled with the editor (samplemap/blank.mpr).
 /// Falls back to a basic 64x64 blank map if the template cannot be parsed.
 pub fn default_map_template() -> MapData {
     const TEMPLATE_JSON: &str = include_str!("../../samplemap/blank.mpr");
-    serde_json::from_str(TEMPLATE_JSON).unwrap_or_else(|_| blank_map(64, 64))
+    match serde_json::from_str::<MapData>(TEMPLATE_JSON) {
+        Ok(mut map) => {
+            map.ensure_elevations();
+            map
+        }
+        Err(_) => blank_map(64, 64),
+    }
+}
+
+impl MapData {
+    fn tile_count(&self) -> usize {
+        if self.width <= 0 || self.height <= 0 {
+            0
+        } else {
+            (self.width as usize).saturating_mul(self.height as usize)
+        }
+    }
+
+    /// Ensure the elevation buffer matches the map dimensions, padding with zeros when absent.
+    pub fn ensure_elevations(&mut self) {
+        let expected = self.tile_count();
+        if expected == 0 {
+            self.elevations.clear();
+        } else if self.elevations.len() != expected {
+            self.elevations.resize(expected, 0);
+        }
+    }
+
+    /// Return the elevation (z) for a given local tile coordinate.
+    pub fn elevation_at(&self, x: i32, y: i32) -> Option<i32> {
+        if x < 0 || y < 0 || x >= self.width || y >= self.height {
+            return None;
+        }
+        let idx = y as usize * self.width as usize + x as usize;
+        self.elevations.get(idx).copied()
+    }
 }

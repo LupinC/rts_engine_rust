@@ -180,7 +180,8 @@ pub(super) fn render_canvas(
                                 });
 
                                 if let Some((sx, sy)) = settings.selected {
-                                    ui.label(format!("Tile: {}, {}", sx, sy));
+                                    let z = map.elevation_at(sx, sy).unwrap_or(0);
+                                    ui.label(format!("Tile: {}, {}, {}", sx, sy, z));
                                 } else {
                                     ui.label("Tile: —");
                                 }

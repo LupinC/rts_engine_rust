@@ -5,11 +5,12 @@ use crate::backend::map::data::MapData;
 
 pub fn parse_mpr(path: &str) -> Result<MapData> {
     let text = fs::read_to_string(path)?;
-    let map: MapData =
+    let mut map: MapData =
         serde_json::from_str(&text).map_err(|e| anyhow!("Invalid .mpr {}: {e}", path))?;
     if map.width <= 0 || map.height <= 0 {
         return Err(super::invalid_map_size(path));
     }
+    map.ensure_elevations();
     Ok(map)
 }
 
