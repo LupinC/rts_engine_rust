@@ -3,10 +3,10 @@ use std::path::Path;
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use super::super::events::OpenMap;
-use super::super::map_parser::{Theater, parse_map};
-use super::super::project::ProjectState;
+use super::project::ProjectState;
 use super::resources::{MapPreview, MapView, WorkspaceSettings};
+use crate::backend::events::OpenMap;
+use crate::backend::map_parser::{Theater, parse_map};
 
 pub fn handle_open_map(
     mut evr: EventReader<OpenMap>,

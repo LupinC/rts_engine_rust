@@ -4,11 +4,10 @@ mod editor_objects;
 mod events;
 mod loader;
 mod map_parser;
-mod project;
 mod systems; // keep as a private module
 
 pub use events::{CreateProject, ExplorerCommand, OpenFolder, OpenMap, WorkspaceCommand};
-pub use project::{EditorLayout, Node, NodeKind, ProjectState};
+pub use systems::project::{EditorLayout, Node, NodeKind, ProjectState};
 pub use systems::{MapPreview, MapView, WorkspaceSettings, theater_color};
 
 // Re-export editor objects (including palette API) so ui can `use crate::backend::{...}`
@@ -19,8 +18,8 @@ pub struct BackendPlugin;
 
 impl Plugin for BackendPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<project::ProjectState>()
-            .init_resource::<project::EditorLayout>()
+        app.init_resource::<ProjectState>()
+            .init_resource::<EditorLayout>()
             .init_resource::<editor_objects::PaletteState>()
             .init_resource::<MapPreview>()
             .init_resource::<MapView>()

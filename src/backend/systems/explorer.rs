@@ -6,11 +6,11 @@ use std::{
 use anyhow::Result;
 use bevy::prelude::*;
 
-use super::super::events::{ExplorerCommand, OpenMap};
-use super::super::loader::load_tree_from;
-use super::super::map_parser::{blank_map, save_mpr};
-use super::super::project::{EditorLayout, ProjectState};
+use super::project::{EditorLayout, ProjectState};
 use super::resources::{MapPreview, MapView, WorkspaceSettings};
+use crate::backend::events::{ExplorerCommand, OpenMap};
+use crate::backend::loader::load_tree_from;
+use crate::backend::map_parser::{blank_map, save_mpr};
 
 pub fn handle_explorer_command(
     mut evr: EventReader<ExplorerCommand>,

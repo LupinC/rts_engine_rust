@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
-use super::super::events::CreateProject;
-use super::super::events::OpenFolder;
-use super::super::loader::load_tree_from;
-use super::super::map_parser::parse_map;
-use super::super::project::{EditorLayout, ProjectState, scaffold_project};
-use super::resources::{MapPreview, MapView, WorkspaceSettings};
+use crate::backend::events::{CreateProject, OpenFolder};
+use crate::backend::loader::load_tree_from;
+use crate::backend::map_parser::parse_map;
+
+use super::super::resources::{MapPreview, MapView, WorkspaceSettings};
+use super::state::{EditorLayout, ProjectState};
 
 pub fn handle_open_folder(
     mut evr: EventReader<OpenFolder>,
@@ -27,11 +27,7 @@ pub fn handle_open_folder(
                             project.root = Some(root);
                             project.root_path = Some(canonical_dir.clone());
                             project.clear_workspace();
-                            layout.show_explorer = true;
-                            layout.open_folders.clear();
-                            layout.open_folders.insert(root_id);
-                            layout.cancel_rename();
-                            layout.clear_pending_close();
+                            layout.reset_with_root(root_id);
 
                             preview.map = None;
                             *view = MapView::default();
@@ -40,14 +36,8 @@ pub fn handle_open_folder(
                             println!("[backend] Opened folder: {}", dir.display());
                         }
                         Err(e) => {
-                            project.root = None;
-                            project.root_path = None;
-                            project.clear_workspace();
-                            layout.show_explorer = false;
-                            layout.open_folders.clear();
-                            layout.cancel_rename();
-                            layout.clear_pending_close();
-
+                            project.reset_all();
+                            layout.reset();
                             preview.map = None;
                             *view = MapView::default();
                             ws.selected = None;
@@ -60,14 +50,8 @@ pub fn handle_open_folder(
                 }
             }
             OpenFolder::Close => {
-                project.root = None;
-                project.root_path = None;
-                project.clear_workspace();
-                layout.show_explorer = false;
-                layout.open_folders.clear();
-                layout.cancel_rename();
-                layout.clear_pending_close();
-
+                project.reset_all();
+                layout.reset();
                 preview.map = None;
                 *view = MapView::default();
                 ws.selected = None;
@@ -88,7 +72,7 @@ pub fn handle_create_project(
 ) {
     for _ in evr.read() {
         if let Some(dir) = rfd::FileDialog::new().set_directory(".").pick_folder() {
-            match scaffold_project(&dir) {
+            match super::state::scaffold_project(&dir) {
                 Ok(default_map_path) => {
                     let canonical_dir = dir.canonicalize().unwrap_or(dir.clone());
 
@@ -98,11 +82,7 @@ pub fn handle_create_project(
                             project.root = Some(root);
                             project.root_path = Some(canonical_dir.clone());
                             project.clear_workspace();
-                            layout.show_explorer = true;
-                            layout.open_folders.clear();
-                            layout.open_folders.insert(root_id);
-                            layout.cancel_rename();
-                            layout.clear_pending_close();
+                            layout.reset_with_root(root_id);
 
                             preview.map = None;
                             *view = MapView::default();

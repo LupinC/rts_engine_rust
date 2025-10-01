@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::project::{Node, NodeKind};
+use super::systems::project::{Node, NodeKind};
 
 pub fn load_tree_from(root: &Path, max_depth: usize, max_nodes: usize) -> Result<Node> {
     let root = root.canonicalize()?;

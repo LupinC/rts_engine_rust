@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::map_parser::{blank_map, save_mpr};
+use crate::backend::map_parser::{blank_map, save_mpr};
 
 /// UI layout prefs/state
 #[derive(Resource, Default, Debug, Clone)]
@@ -44,6 +44,21 @@ impl EditorLayout {
     pub fn clear_pending_close(&mut self) {
         self.pending_close = None;
     }
+
+    pub fn reset(&mut self) {
+        self.show_explorer = false;
+        self.open_folders.clear();
+        self.cancel_rename();
+        self.clear_pending_close();
+    }
+
+    pub fn reset_with_root(&mut self, root_id: String) {
+        self.show_explorer = true;
+        self.open_folders.clear();
+        self.open_folders.insert(root_id);
+        self.cancel_rename();
+        self.clear_pending_close();
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -70,7 +85,7 @@ pub struct OpenMapEntry {
 #[derive(Resource, Default, Debug, Clone)]
 pub struct ProjectState {
     pub root: Option<Node>,
-    pub root_path: Option<std::path::PathBuf>,
+    pub root_path: Option<PathBuf>,
     pub open_maps: Vec<OpenMapEntry>,
     pub active_map: Option<String>,
     pub dirty_maps: HashSet<String>,
@@ -81,6 +96,12 @@ impl ProjectState {
         self.open_maps.clear();
         self.active_map = None;
         self.dirty_maps.clear();
+    }
+
+    pub fn reset_all(&mut self) {
+        self.root = None;
+        self.root_path = None;
+        self.clear_workspace();
     }
 
     pub fn note_open_map<P: AsRef<Path>>(&mut self, path: P) {
